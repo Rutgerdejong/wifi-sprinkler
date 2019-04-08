@@ -1,0 +1,257 @@
+{% extends 'layout.html' %}
+{% from "_macros.html" import day_interval %}
+
+{% block body %}
+		<div class="container" >
+			<div class="row">
+				<div id="schedule_div" class="col-lg-12">
+					<table class="table table-bordered dataTable" id="dataTable" cellspacing="0" width="100%">
+						<thead>
+							<tr role="row" style="border: 2px solid #000 !important;">
+								<th class="center">Enabled</th>
+								<th class="td-select center">#</th>
+								<th>Description</th>
+								<th>Day Interval</th>
+								<th class="center" >Start Date</th>
+								<th class="center" >End Date</th>
+								<th class="center"></th>
+							</tr>
+						</thead>
+						<tfoot>
+							<tr>
+								<th colspan="8" class="AddScheduleSpan center RowEven" >
+									<div class="row" >
+										<div class="col-sm-3 middle">
+											Interval: {{ day_interval('day_interval', 1) }} days
+										</div>
+										<div class="col-sm-3">
+											Start Date: <input type="date" id="schedule_startdate" value="" style="" />
+										</div>
+										<div class="col-sm-3">
+											End Date: <input type="date" id="schedule_enddate" class="" value="" style="" />
+										</div>
+										<div class="col-sm-3 middle">
+											<input type="button" id="btn_add_schedule" value="Create schedule" style=""/>
+										</div>
+									</div>
+								</th>
+							</tr>
+						</tfoot>
+						<tbody>
+							{% for schedule in schedules %}
+							<tr role="row" class="RowEven" style="border-top: 2px solid #000;">
+								<td>
+									{% if schedule.enabled %}
+									<input type="checkbox" id="chk_{{schedule.schedule_id}}" name="chk_{{schedule.schedule_id}}" checked>
+									{% else %}
+									<input type="checkbox" id="chk_{{schedule.schedule_id}}" name="chk_{{schedule.schedule_id}}">
+									{% endif %}
+						      </td>
+						      <td class="td-select">{{ schedule.schedule_id }}</td>
+								<td class="ScheduleDescriptionSpan">
+									<input type="text" id="desc_{{ schedule.schedule_id }}" value="{{ schedule.description }}" style="width:100%;max-width: 100%;" {{'' if schedule.enabled else 'disabled'}} >
+								</td>
+								<td class="ScheduleValue">
+									{{ day_interval(schedule.schedule_id, schedule.day_interval, schedule.enabled) }}
+								</td>
+								<td class="ScheduleStartDate">
+									<input type="date" id="start-date_{{ schedule.schedule_id }}" value="{{ schedule.start_date|dateformat }}" style="width:100%;max-width: 100%;" {{'' if schedule.enabled else 'disabled'}}/>
+								</td>
+								<td class="ScheduleEndDate">
+									<input type="date" id="end-date_{{ schedule.schedule_id }}" value="{{ schedule.end_date|dateformat }}" style="width:100%;max-width: 100%;" {{'' if schedule.enabled else 'disabled'}}/>
+								</td>
+								<td class="ScheduleDeleteSpan">
+									<input type="button" id="delete_{{ schedule.schedule_id }}" value="Delete" style="min-width: 50px;"/>
+								</td>
+								</tr>
+							<tr>
+								<td colspan="8">
+									<table class="table table-bordered dataTable" id="table_{{schedule.schedule_id}}" cellspacing="0" width="100%" style="margin-bottom: 0px;">
+										<tr role="row">
+											<th class="center">#</th>
+											<th>Description</th>
+											<th class="center">Start Time</th>
+											<th></th>
+										</tr>
+										<tfoot>
+											<tr>
+												<th colspan="5" class="center ProgramAddSpan">
+													<select id="select-program_{{schedule.schedule_id}}">
+													{% for program in programs %}
+													<option value="{{ program.program_id }}">{{ program.description }}</option>
+													{% endfor %}
+													</select>													
+													<input type="button" id="btn-program-add_{{schedule.schedule_id}}" value="Add Program" style="min-width: 50px;"/>
+												</th>
+											</tr>
+										</tfoot>
+										{% for program in schedule.program_schedule %}
+											{% if loop.index % 2 == 0 %}
+											<tr role="row" class="RowEven">
+											{% else %}
+											<tr role="row" class="RowOdd">
+											{% endif %}
+											<td>{{ program.program_id }}</td>
+											<td>{{ program.program.description }}</td>
+											<td class="ProgramStartTimeSpan">
+												{% for run_time in program.program.program_run %}
+													<div>
+														<span id="run_time">{{ run_time.start_time|timeformat }}</span>
+													<div>
+												{% endfor %}
+											</td>
+											<td class="ProgramDeleteSpan">
+												<input type="hidden" id="schedule-id" value="{{ schedule.schedule_id }}" >
+												<input type="button" id="remove_{{ program.program_id }}" value="Remove" style="min-width: 50px;"/>
+											</td>
+										</tr>
+										{% endfor %}
+									</table>
+								</td>
+							</tr>
+						  {% endfor %}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div> 
+
+	<script>
+		$(document).ready(function() {
+
+			$("#dialog").dialog({
+				autoOpen: false,
+				modal: true
+			});
+
+			var now = new Date();
+			$("#schedule_startdate" ).val(now.toISOString().slice(0,10));
+			now.setMonth(now.getMonth()+1);
+			$("#schedule_enddate" ).val(now.toISOString().slice(0,10));
+
+			// Create SocketIO connect and attach handlers for events from the server.
+			var socket = io.connect();
+			socket.on('connect', function(e) {
+				console.log("Connected!");
+			});
+
+			socket.on('change_event', function(e) {
+				location.reload();
+			});
+			
+			socket.on('schedule_change', function(e) {
+				location.reload();
+			});
+
+			// Setup live_data event receiver.
+			var liveDataSource = new EventSource("{{ url_for('live_data') }}");
+			liveDataSource.onmessage = function(e) {
+				var data = $.parseJSON(e.data);
+				$('#time_value').text(data.time);
+			}
+
+			$('#btn_add_schedule').click(function() {
+				var day_interval = $("#select_day_interval").val();
+				var start_date = $("#schedule_startdate").val();
+				var end_date = $("#schedule_enddate").val();
+				socket.emit('add_schedule',JSON.stringify({'day_interval': parseInt(day_interval), 'start_date': start_date, 'end_date': end_date }));
+			});
+
+			$("#schedule_div input[type='checkbox']").click(function() {
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				if (this.checked){
+					$("#desc_"+id).removeAttr("disabled");
+					$("#day-interval_"+id).removeAttr("disabled");
+					$("#start-date_"+id).removeAttr("disabled");
+					$("#end-date_"+id).removeAttr("disabled");
+				} else {
+					$("#desc_"+id).prop("disabled", "disabled");
+					$("#day-interval_"+id).prop("disabled", "disabled");
+					$("#start-date_"+id).prop("disabled", "disabled");
+					$("#end-date_"+id).prop("disabled", "disabled");
+				}
+				socket.emit('set_schedule_enable',JSON.stringify({'schedule_id': parseInt(id), 'value': this.checked }));
+			});
+
+			$(".ScheduleDescriptionSpan input").change(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				socket.emit('set_schedule_desc',JSON.stringify({'schedule_id': parseInt(id), 'value': this.value }));
+			});
+
+			$(".ScheduleValue select").change(function() {
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				var schedule_value = $(this).val();
+				socket.emit('set_schedule_value',JSON.stringify({'schedule_id': parseInt(id), 'value': schedule_value }));
+			});
+
+			$(".ScheduleStartDate input").change(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				socket.emit('set_schedule_start_date',JSON.stringify({'schedule_id': parseInt(id), 'value': this.value }));
+			});
+
+			$(".ScheduleEndDate input").change(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				socket.emit('set_schedule_end_date',JSON.stringify({'schedule_id': parseInt(id), 'value': this.value }));
+			});
+
+			$(".ScheduleDeleteSpan input").click(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				$("#dialog").dialog({
+					buttons : {
+						"Confirm" : function() {
+							socket.emit('delete_schedule',JSON.stringify({'schedule_id': parseInt(id) }));
+						},
+						"Cancel" : function() {
+							$(this).dialog("close");
+						}
+					}
+				});
+				$("#dialog").dialog("open");
+			});
+
+			$(".ProgramAddSpan input").click(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				var zone_id = $("#select-program_" + id).val();
+				socket.emit('add_program_schedule',JSON.stringify({'schedule_id': parseInt(id), 'program_id': parseInt(zone_id)}));
+			});
+
+			$(".ProgramDeleteSpan input").click(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var program_id = arrID[1];
+				var schedule_id = $(this).siblings("input:hidden").val();
+				$("#dialog").dialog({
+					buttons : {
+						"Confirm" : function() {
+							socket.emit('remove_program_schedule',JSON.stringify({'schedule_id': parseInt(schedule_id), 'program_id': parseInt(program_id) }));
+						},
+						"Cancel" : function() {
+							$(this).dialog("close");
+						}
+					}
+				});
+				$("#dialog").dialog("open");
+			});
+
+		});
+	</script>
+		<div id="dialog" title="Confirmation Required">
+			Are you sure about this?
+		</div>
+	</body>
+</html>
+{% endblock %}

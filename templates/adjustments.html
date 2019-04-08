@@ -1,0 +1,291 @@
+{% extends 'layout.html' %}
+{% from "_macros.html" import duration, percentage %}
+
+{% block body %}
+		<div class="container" >
+			<div class="row">
+				<div id="adjustment_div" class="col-lg-12">
+					<table class="table table-bordered dataTable" id="dataTable" cellspacing="0" width="100%">
+						<thead>
+							<tr role="row" style="border: 2px solid #000 !important;">
+								<th class="center">Enabled</th>
+								<th class="td-select center">#</th>
+								<th class="td-select">Description</th>
+								<th>Adjustment</th>
+								<th>Start Date</th>
+								<th>End Date</th>
+								<th class="center"></th>
+							</tr>
+						</thead>
+						<tfoot>
+							<tr>
+								<th colspan="7" class="AddAdjustmentSpan center RowEven">
+									<div class="row" >
+										<div class="col-sm-3 middle">									
+											Adjustment:	{{ percentage('adjust-value', 100, True) }} %
+										</div>
+										<div class="col-sm-3 middle">									
+											Start Date: <input type="date" id="adjust_startdate" value="" style="" />
+										</div>
+										<div class="col-sm-3 middle">									
+											End Date: <input type="date" id="adjust_enddate" value="" style="" />
+										</div>
+										<div class="col-sm-3 middle">									
+											<input type="button" id="btn_add_adjustment" value="Create Adjustment" style=""/>									
+										</div>
+									</div>
+								</th>
+							</tr>
+						</tfoot>
+						<tbody>
+							{% for adjustment in adjustments %}
+							<tr role="row" class="RowEven" style="border-top: 2px solid #000;">
+								<td>
+									{% if adjustment.enabled %}
+									<input type="checkbox" id="chk_{{adjustment.adjustment_id}}" name="chk_{{adjustment.adjustment_id}}" checked>
+									{% else %}
+									<input type="checkbox" id="chk_{{adjustment.adjustment_id}}" name="chk_{{adjustment.adjustment_id}}">
+									{% endif %}
+						      </td>
+						      <td class="td-select">{{ adjustment.adjustment_id }}</td>
+								<td class="AdjustmentDescriptionSpan td-select">
+									<input type="text" id="desc_{{ adjustment.adjustment_id }}" value="{{ adjustment.description }}" style="" {{'' if adjustment.enabled else 'disabled'}} >
+								</td>
+								<td class="AdjustmentValue">
+									{{ percentage(adjustment.adjustment_id, adjustment.adjust_value, adjustment.enabled) }} %
+								</td>
+								<td class="AdjustmentStartDate">
+									<input type="date" id="start-date_{{ adjustment.adjustment_id }}" value="{{ adjustment.start_date|dateformat }}" style="" {{'' if adjustment.enabled else 'disabled'}}/>
+								</td>
+								<td class="AdjustmentEndDate">
+									<input type="date" id="end-date_{{ adjustment.adjustment_id }}" value="{{ adjustment.end_date|dateformat }}" style="" {{'' if adjustment.enabled else 'disabled'}}/>
+								</td>
+								<td class="AdjustmentDeleteSpan">
+									<input type="button" id="delete_{{ adjustment.adjustment_id }}" value="Delete" style=""/>
+								</td>
+								</tr>
+							<tr>
+								<td colspan="7">
+									<table class="table table-bordered dataTable" id="table_{{adjustment.adjustment_id}}" cellspacing="0" width="100%" style="margin-bottom: 0px;">
+										<tr role="row">
+											<th class="center">#</th>
+											<th>Description</th>
+											<th>Start Time</th>
+											<th></th>
+										</tr>
+										<tfoot>
+											<tr>
+												<th colspan="5" class="center ProgramAddSpan">
+													<select id="select-program_{{adjustment.adjustment_id}}">
+													{% for program in programs %}
+													<option value="{{ program.program_id }}">{{ program.description }}</option>
+													{% endfor %}
+													</select>													
+													<input type="button" id="btn-program-add_{{adjustment.adjustment_id}}" value="Add Program" style=""/>
+												</th>
+											</tr>
+										</tfoot>
+										{% for program in adjustment.program_adjustment %}
+											{% if loop.index % 2 == 0 %}
+											<tr role="row" class="RowEven">
+											{% else %}
+											<tr role="row" class="RowOdd">
+											{% endif %}
+											<td>{{ program.program_id }}</td>
+											<td>{{ program.program.description }}</td>
+											<td class="ProgramStartTimeSpan">
+												{% for run_time in program.program.program_run %}
+													<div>
+														<span id="run_time">{{ run_time.start_time|timeformat }}</span>
+													<div>
+												{% endfor %}
+											</td>
+											<td class="ProgramDeleteSpan">
+												<input type="hidden" id="adjustment-id" value="{{ adjustment.adjustment_id }}" >
+												<input type="button" id="remove_{{ program.program_id }}" value="Remove" style="min-width: 50px;"/>
+											</td>
+										</tr>
+										{% endfor %}
+									</table>
+								</td>
+							</tr>
+						  {% endfor %}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div> 
+
+	<script>
+		$(document).ready(function() {
+
+			$("#dialog").dialog({
+				autoOpen: false,
+				modal: true
+			});
+
+			var now = new Date();
+			$("#adjust_startdate" ).val(now.toISOString().slice(0,10));
+			now.setMonth(now.getMonth()+1);
+			$("#adjust_enddate" ).val(now.toISOString().slice(0,10));
+
+			// Create SocketIO connect and attach handlers for events from the server.
+			var socket = io.connect();
+			socket.on('connect', function(e) {
+				console.log("Connected!");
+			});
+
+			socket.on('change_event', function(e) {
+				location.reload();
+			});
+			
+			socket.on('adjustment_change', function(e) {
+				location.reload();
+			});
+
+			// Setup live_data event receiver.
+			var liveDataSource = new EventSource("{{ url_for('live_data') }}");
+			liveDataSource.onmessage = function(e) {
+				var data = $.parseJSON(e.data);
+				$('#time_value').text(data.time);
+			}
+
+			$('#btn_add_adjustment').click(function() {
+				var adjust_value = $("#select_adjust-value").val();
+				var start_date = $("#adjust_startdate").val();
+				var end_date = $("#adjust_enddate").val();
+				socket.emit('add_adjustment',JSON.stringify({'adjust_value': adjust_value, 'start_date': start_date, 'end_date': end_date }));
+			});
+
+			$("#adjustment_div input[type='checkbox']").click(function() {
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				if (this.checked){
+					$("#desc_"+id).removeAttr("disabled");
+					$("#adjust-value_"+id).removeAttr("disabled");
+					$("#start-date_"+id).removeAttr("disabled");
+					$("#end-date_"+id).removeAttr("disabled");
+				} else {
+					$("#desc_"+id).prop("disabled", "disabled");
+					$("#adjust-value_"+id).prop("disabled", "disabled");
+					$("#adjust-unit_"+id).prop("disabled", "disabled");
+					$("#start-date_"+id).prop("disabled", "disabled");
+					$("#end-date_"+id).prop("disabled", "disabled");
+				}
+				socket.emit('set_adjustment_enable',JSON.stringify({'adjustment_id': parseInt(id), 'value': this.checked }));
+			});
+
+			$(".AdjustmentDescriptionSpan input").change(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				socket.emit('set_adjustment_desc',JSON.stringify({'adjustment_id': parseInt(id), 'value': this.value }));
+			});
+
+			$(".AdjustmentValue select").change(function() {
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				var adjustment_value = $(this).val();
+				socket.emit('set_adjustment_value',JSON.stringify({'adjustment_id': parseInt(id), 'value': adjustment_value }));
+			});
+
+			$(".AdjustmentStartDate input").change(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				socket.emit('set_adjustment_start_date',JSON.stringify({'adjustment_id': parseInt(id), 'value': this.value }));
+			});
+
+			$(".AdjustmentEndDate input").change(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				socket.emit('set_adjustment_end_date',JSON.stringify({'adjustment_id': parseInt(id), 'value': this.value }));
+			});
+
+			$(".AdjustmentDeleteSpan input").click(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				$("#dialog").dialog({
+					buttons : {
+						"Confirm" : function() {
+							socket.emit('delete_adjustment',JSON.stringify({'adjustment_id': parseInt(id) }));
+						},
+						"Cancel" : function() {
+							$(this).dialog("close");
+						}
+					}
+				});
+				$("#dialog").dialog("open");
+			});
+
+			$(".ProgramAddSpan input").click(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				var program_id = $("#select-program_" + id).val();
+				console.log(program_id);
+				socket.emit('add_program_adjustment',JSON.stringify({'adjustment_id': parseInt(id), 'program_id': parseInt(program_id)}));
+			});
+
+			$(".ProgramRunTimeSpan select").change(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var program_id = arrID[1];
+				var run_time = $(this).val();
+				var adjustment_id = $(this).siblings("input:hidden").val();
+				socket.emit('change_adjustment_unit_runtime',JSON.stringify({'adjustment_id': parseInt(adjustment_id), 'program_id': parseInt(program_id), 'run_time': parseInt(run_time) }));
+			});
+			
+			$(".ProgramDeleteSpan input").click(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var program_id = arrID[1];
+				var adjustment_id = $(this).siblings("input:hidden").val();
+				$("#dialog").dialog({
+					buttons : {
+						"Confirm" : function() {
+							socket.emit('remove_program_adjustment',JSON.stringify({'adjustment_id': parseInt(adjustment_id), 'program_id': parseInt(program_id) }));
+						},
+						"Cancel" : function() {
+							$(this).dialog("close");
+						}
+					}
+				});
+				$("#dialog").dialog("open");
+			});
+
+			$(".AdjustmentInterval input").change(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var adjustment_id = arrID[1];
+				var day_interval = $(this).val();
+				socket.emit('change_adjustment_day_interval',JSON.stringify({'adjustment_id': parseInt(adjustment_id), 'day_interval': parseInt(day_interval)}));
+			});
+
+			$(".AdjustmentStartTimeSpan input:button").click(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var adjustment_id = arrID[1];
+				var start_time = $(this).siblings("input:text").val();
+				socket.emit('add_adjustment_run_time',JSON.stringify({'adjustment_id': parseInt(adjustment_id), 'start_time': start_time}));
+			});
+
+			$(".AdjustmentDeleteRunTimeSpan input:button").click(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var adjustment_id = arrID[1];
+				var start_time = $(this).siblings("#run_time").text();
+				socket.emit('remove_adjustment_run_time',JSON.stringify({'adjustment_id': parseInt(adjustment_id), 'start_time': start_time}));
+			});
+		});
+	</script>
+		<div id="dialog" title="Confirmation Required">
+			Are you sure about this?
+		</div>
+	</body>
+</html>
+{% endblock %}

@@ -1,0 +1,140 @@
+{% extends 'layout.html' %}
+{% from "_macros.html" import duration %}
+
+{% block body %}
+		<div class="container" >
+			<div class="row">
+				<div id="zone_div" class="col-lg-12">
+					<table class="table table-bordered dataTable" id="dataTable" cellspacing="0"  width="100%">
+						<thead>
+							<tr role="row">
+							<th >Enabled</th>
+							<th class="td-select">Zone</th>
+							<th >Description</th>
+							<th id="ZoneOnOffSpan">On/Off</th>
+							<th >Duration</th>
+							<th >Progress</th>
+						</thead>
+						<tfoot>
+							<tr>
+								<th >Enabled</th>
+								<th class="td-select">Zone</th>
+								<th >Description</th>
+								<th id="ZoneOnOffSpan">On/Off</th>
+								<th >Duration</th>
+								<th >Progress</th>
+							</tr>
+						</tfoot>
+						<tbody>
+						  {% for zone in zones %}
+						  	{% if zone.zone_id % 2 == 0 %}
+						    <tr role="row" class="RowEven">
+						    {% else %}
+						    <tr role="row" class="RowOdd">
+						    {% endif %}
+						      <td >
+						        {% if zone.enabled %}
+						          <input type="checkbox" id="chk_{{zone.zone_id}}" name="chk_{{zone.zone_id}}" checked>
+						        {% else %}
+						          <input type="checkbox" id="chk_{{zone.zone_id}}" name="chk_{{zone.zone_id}}">
+						        {% endif %}
+						      </td>
+						      <td class="td-select">{{ zone.zone_id }}</td>
+						      <td id="ZoneDescriptionSpan"><input type="text" id="desc_{{ zone.zone_id }}" value="{{ zone.description }}"></td>
+						      {% if zone.enabled %}
+						        <td id=""><button class="btn btn-success" type='button' value=0 id='{{ zone.zone_id }}'>Off</button></td>
+						      {% else %}
+						        <td id=""><button class="btn btn-success" type='button' value=0 id='{{ zone.zone_id }}' disabled>n/a</button></td>
+						      {% endif %}
+						      <td>{{ duration(zone.zone_id, 0) }}</td>
+						      <td><span id="progress_div_{{zone.zone_id}}"></span></td>
+						   	</tr>
+						  {% endfor %}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div> 
+
+		<script>
+		$(document).ready(function() {
+
+			// Create SocketIO connect and attach handlers for events from the server.
+			var socket = io.connect();
+			socket.on('connect', function(e) {
+				console.log("Connected!");
+			});
+
+			socket.on('change_event', function(e) {
+				location.reload();
+			});
+
+			socket.on('zone_change', function(e) {
+				var data = $.parseJSON(e);
+				if (!data.interrupt_zones){
+					$("#progress_div_"+data.zone).text(data.progress + "%");
+				}
+				if (data.progress == 100 || data.interrupt_zones){
+					$("button#"+data.zone).removeClass('btn-danger');
+					$("button#"+data.zone).addClass('btn-success');
+					$("button#"+data.zone).text("Off");
+				} else {
+					if ($("button#"+data.zone).hasClass('btn-success')) {
+						$("button#"+data.zone).removeClass('btn-success');
+						$("button#"+data.zone).addClass('btn-danger');
+						$("button#"+data.zone).text("On");
+					}
+				}
+			});
+
+			// Setup live_data event receiver.
+			var liveDataSource = new EventSource("{{ url_for('live_data') }}");
+			liveDataSource.onmessage = function(e) {
+				var data = $.parseJSON(e.data);
+				$('#time_value').text(data.time);
+			}
+
+			$('#zone_div button').click(function() {
+				var id = this.id;
+				var state=0;
+				if ($(this).hasClass('btn-success')) {
+					$(this).removeClass('btn-success');
+					$(this).addClass('btn-danger');
+					$(this).text("On");
+					state = 1
+				} else {
+					$(this).removeClass('btn-danger');
+					$(this).addClass('btn-success');
+					$(this).text("Off");
+					socket.emit('interrupt_zone_event');
+				}              
+				var duration = parseInt($("#select_" + id + " option:selected" ).text());
+				socket.emit('set_zone_event',JSON.stringify({'zone': parseInt(id), 'value': state, 'duration' : duration }));
+			});
+
+			$("#zone_div input[type='checkbox']").click(function() {
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				if (this.checked){
+					$("button#"+id).removeAttr("disabled");  
+					$("button#"+id).text("Off");  
+				} else {
+					$("button#"+id).prop("disabled", "disabled");
+					$("button#"+id).text("n/a");  
+				}
+				socket.emit('set_zone_enable',JSON.stringify({'zone': parseInt(id), 'value': this.checked }));
+			});
+
+			$("#ZoneDescriptionSpan input").change(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				socket.emit('set_zone_desc',JSON.stringify({'zone': parseInt(id), 'value': this.value }));
+			});
+
+	   });
+		</script>
+	</body>
+</html>
+{% endblock %}

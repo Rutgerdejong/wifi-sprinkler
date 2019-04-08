@@ -1,0 +1,470 @@
+{% extends 'layout.html' %}
+{% from "_macros.html" import weekday %}
+
+{% block body %}
+		<div class="container" >
+			<div class="row">
+				<div id="restriction_div" class="col-lg-12">
+					<table class="table table-bordered dataTable" id="dataTable" cellspacing="0" width="100%">
+						<thead>
+							<tr role="row" style="border: 2px solid #000 !important;">
+								<th class="center">Enabled</th>
+								<th class="td-select center">#</th>
+								<th class="td-select">Description</th>
+								<th>Type</th>
+								<th colspan="2">Range</th>
+								<th>Allow/Disallow</th>
+								<th class="center"></th>
+							</tr>
+						</thead>
+						<tfoot>
+							<tr>
+								<th colspan="10" class="AddRestrictionSpan center RowEven">
+									<div class="row col-lg-12" >
+										<div class="col-lg-2 middle">									
+											Type:	<select id="select-type">
+												<option id="Calendar">Calendar</option>
+												<option id="Sensor">Sensor</option>
+												<option id="Time">Time</option>
+												<option id="Weekday">Weekday</option>
+											</select>
+										</div>
+										<div id="start-date-div" class="col-lg-2 left">									
+											Start Date: <input type="date" id="start-date-input"  />
+										</div>
+										<div id="end-date-div" class="col-lg-2 left">									
+											End Date: <input type="date" id="end-date-input"  />
+										</div>
+										<div id="start-range-div" class="col-lg-2 left" style="display:none;">									
+											Start Range: <input type="number" id="start-range-input" step="0.1"/>
+										</div>
+										<div id="end-range-div" class="col-lg-2 left" style="display:none;">									
+											End Range: <input type="number" id="end-range-input" step="0.1" />
+										</div>										
+										<div id="start-time-div" class="col-lg-2 left" style="display:none;">									
+											Start Time: <input type="time" id="start-time-input" />
+										</div>
+										<div id="end-time-div" class="col-lg-2 left" style="display:none;">									
+											End Time: <input type="time" id="end-time-input"  />
+										</div>	
+										<div id="week-day-div" class="col-lg-4 middle" style="display:none;">									
+											<div class="weekDays-selector">
+											  <input type="checkbox" id="weekday-mon" class="weekday" value="1"/>
+											  <label for="weekday-mon">M</label>
+											  <input type="checkbox" id="weekday-tue" class="weekday" value="2"/>
+											  <label for="weekday-tue">T</label>
+											  <input type="checkbox" id="weekday-wed" class="weekday" value="3"/>
+											  <label for="weekday-wed">W</label>
+											  <input type="checkbox" id="weekday-thu" class="weekday" value="4"/>
+											  <label for="weekday-thu">T</label>
+											  <input type="checkbox" id="weekday-fri" class="weekday" value="5"/>
+											  <label for="weekday-fri">F</label>
+											  <input type="checkbox" id="weekday-sat" class="weekday" value="6"/>
+											  <label for="weekday-sat">S</label>
+											  <input type="checkbox" id="weekday-sun" class="weekday" value="0"/>
+											  <label for="weekday-sun">S</label>
+											</div>									
+										</div>	
+										<div class="col-lg-2 left" id="radio_allow-div">
+											<input type="radio" id="radio_allow" name="allow-disallow" value="Allow"  checked/>
+											<label for="radio_allow">Allow</label><br>
+											<input type="radio" id="radio_disallow" name="allow-disallow" value="Disallow" />
+											<label for="radio_disallow">Disallow</label>
+										</div>
+										<div class="col-lg-2 middle">									
+											<input type="button" id="btn_add_restriction" value="Create Restriction" />									
+										</div>
+									</div>
+								</th>
+							</tr>
+						</tfoot>
+						<tbody>
+							{% for restriction in restrictions %}
+							<tr role="row" class="RowEven" style="border-top: 2px solid #000;">
+								<td class="RestrictionEnableSpan">
+									{% if restriction.enabled %}
+									<input type="checkbox" id="chk_{{restriction.restriction_id}}" name="chk_{{restriction.restriction_id}}" checked>
+									{% else %}
+									<input type="checkbox" id="chk_{{restriction.restriction_id}}" name="chk_{{restriction.restriction_id}}">
+									{% endif %}
+						      </td>
+						      <td class="td-select">{{ restriction.restriction_id }}</td>
+								<td class="RestrictionDescriptionSpan td-select">
+									<input type="text" id="desc_{{ restriction.restriction_id }}" value="{{ restriction.description }}" {{'' if restriction.enabled else 'disabled'}} >
+								</td>
+						      <td class="td-select">{{ restriction.restriction_type }}</td>
+								{% if restriction.restriction_type=='Calendar' %}
+								<td class="RestrictionStartDate">
+									<input type="date" id="start-date_{{ restriction.restriction_id }}" value="{{ restriction.start_date|dateformat }}"  {{'' if restriction.enabled else 'disabled'}}/>
+								</td>
+								<td class="RestrictionEndDate">
+									<input type="date" id="end-date_{{ restriction.restriction_id }}" value="{{ restriction.end_date|dateformat }}"  {{'' if restriction.enabled else 'disabled'}}/>
+								</td>
+								{% endif %}
+								{% if restriction.restriction_type=='Sensor' %}
+								<td class="RestrictionStartRange">
+									<input type="number" id="start-range_{{ restriction.restriction_id }}" value="{{ restriction.start_range }}" step="0.1" {{'' if restriction.enabled else 'disabled'}}/>
+								</td>
+								<td class="RestrictionEndRange">
+									<input type="number" id="end-range_{{ restriction.restriction_id }}" value="{{ restriction.end_range }}" step="0.1" {{'' if restriction.enabled else 'disabled'}}/>
+								</td>
+								{% endif %}
+								{% if restriction.restriction_type=='Time' %}
+								<td class="RestrictionStartTime">
+									<input type="time" id="start-time_{{ restriction.restriction_id }}" value="{{ restriction.start_date|timeformat }}"  {{'' if restriction.enabled else 'disabled'}}/>
+								</td>
+								<td class="RestrictionEndTime">
+									<input type="time" id="end-time_{{ restriction.restriction_id }}" value="{{ restriction.end_date|timeformat }}"  {{'' if restriction.enabled else 'disabled'}}/>
+								</td>
+								{% endif %}
+								{% if restriction.restriction_type=='Weekday' %}
+								<td colspan="2" class="RestrictionValue">
+									{{ weekday(restriction.restriction_id, restriction.restriction_value, restriction.enabled) }}
+								</td>
+								{% endif %}
+								<td class="RestrictionAllowDisAllow">
+									<input type="radio" id="radio-allow_{{restriction.restriction_id}}" name="allow-disallow_{{restriction.restriction_id}}" value="Allow" {{'' if not restriction.allow_disallow_indicator else 'checked'}} {{'' if restriction.enabled else 'disabled'}}/>
+									<label for="radio_allow">Allow</label><br>
+									<input type="radio" id="radio-disallow_{{restriction.restriction_id}}" name="allow-disallow_{{restriction.restriction_id}}" value="Disallow" {{'' if restriction.allow_disallow_indicator else 'checked'}} {{'' if restriction.enabled else 'disabled'}}/>
+									<label for="radio_disallow">Disallow</label>
+								</td>								
+								<td class="RestrictionDeleteSpan">
+									<input type="button" id="delete_{{ restriction.restriction_id }}" value="Delete" />
+								</td>
+							</tr>
+							<tr>
+								<td colspan="8">
+									<table class="table table-bordered dataTable" id="table_{{restriction.restriction_id}}" cellspacing="0" width="100%" style="margin-bottom: 0px;">
+										<tr role="row">
+											<th class="center">#</th>
+											<th>Description</th>
+											<th>Start Time</th>
+											<th></th>
+										</tr>
+										<tfoot>
+											<tr>
+												<th colspan="5" class="center ProgramAddSpan">
+													<select id="select-program_{{restriction.restriction_id}}">
+													{% for program in programs %}
+													<option value="{{ program.program_id }}">{{ program.description }}</option>
+													{% endfor %}
+													</select>													
+													<input type="button" id="btn-program-add_{{restriction.restriction_id}}" value="Add Program" />
+												</th>
+											</tr>
+										</tfoot>
+										{% for program in restriction.program_restriction %}
+											{% if loop.index % 2 == 0 %}
+											<tr role="row" class="RowEven">
+											{% else %}
+											<tr role="row" class="RowOdd">
+											{% endif %}
+											<td>{{ program.program_id }}</td>
+											<td>{{ program.program.description }}</td>
+											<td class="ProgramStartTimeSpan">
+												{% for run_time in program.program.program_run %}
+													<div>
+													{% if restriction.restriction_type=='Time' %}
+														<span id="run_time" class="{{ 'green' if isAllowedTime(restriction.start_date, restriction.end_date, run_time.start_time, restriction.allow_disallow_indicator ) else 'red'}}">{{ run_time.start_time|timeformat }}</span>
+													{% else %}
+														<span id="run_time">{{ run_time.start_time|timeformat }}</span>
+													{% endif %}
+													<div>
+												{% endfor %}
+											</td>
+											<td class="ProgramDeleteSpan">
+												<input type="hidden" id="restriction-id" value="{{ restriction.restriction_id }}" >
+												<input type="button" id="remove_{{ program.program_id }}" value="Remove" style="min-width: 50px;"/>
+											</td>
+										</tr>
+										{% endfor %}
+									</table>
+								</td>
+							</tr>
+						  {% endfor %}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div> 
+
+	<script>
+		$(document).ready(function() {
+
+			$("#dialog").dialog({
+				autoOpen: false,
+				modal: true
+			});
+
+			var now = new Date();
+			$("#start-date-input" ).val(now.toISOString().slice(0,10));
+			now.setMonth(now.getMonth()+1);
+			$("#end-date-input" ).val(now.toISOString().slice(0,10));
+
+			function addZero(i) {
+				if (i < 10) {
+					i = "0" + i;
+				}
+				return i;
+			}
+			var now = new Date();
+			$("#start-time-div input").val(addZero(now.getHours())+':'+addZero(now.getMinutes()));
+			$("#end-time-div input").val(addZero(now.getHours())+':'+addZero(now.getMinutes()));
+
+			// Create SocketIO connect and attach handlers for events from the server.
+			var socket = io.connect();
+			socket.on('connect', function(e) {
+				console.log("Connected!");
+			});
+
+			socket.on('change_event', function(e) {
+				location.reload();
+			});
+			
+			socket.on('restriction_change', function(e) {
+				location.reload();
+			});
+
+			// Setup live_data event receiver.
+			var liveDataSource = new EventSource("{{ url_for('live_data') }}");
+			liveDataSource.onmessage = function(e) {
+				var data = $.parseJSON(e.data);
+				$('#time_value').text(data.time);
+			}
+
+			$("#select-type").change(function(){
+				$("#start-date-div").hide();
+				$("#end-date-div").hide();
+				$("#start-range-div").hide();
+				$("#end-range-div").hide();
+				$("#start-time-div").hide();
+				$("#end-time-div").hide();
+				$("#week-day-div").hide();
+				switch($(this).val()){
+					case "Calendar":
+						$("#start-date-div").show();
+						$("#end-date-div").show();
+						break;
+					case "Sensor":
+						$("#start-range-div").show();
+						$("#end-range-div").show();
+						break;
+					case "Time":
+						$("#start-time-div").show();
+						$("#end-time-div").show();
+						break;
+					case "Weekday":
+						$("#week-day-div").show();
+						break;
+				}
+			});
+
+			$('#btn_add_restriction').click(function() {
+				var allow_disallow = $("#radio_allow-div input:checked").val();
+				if (allow_disallow=="Allow"){
+					bAllow_Disallow = true;
+				} else {
+					bAllow_Disallow = false;
+				}
+				// console.log(bAllow_Disallow);
+				var restriction_type = $("#select-type").val();
+				switch(restriction_type){
+					case "Calendar":
+						console.log("Calendar");
+						var start_date = $("#start-date-div input").val();
+						var end_date = $("#end-date-div input").val();
+						socket.emit('add_restriction',JSON.stringify({'restriction_type': restriction_type, 'start_date': start_date, 'end_date': end_date, 'allow_disallow':bAllow_Disallow }));
+						break;
+					case "Sensor":
+						console.log("Sensor");
+						var start_range = $("#start-range-div input").val();
+						var end_range = $("#end-range-div input").val();
+						socket.emit('add_restriction',JSON.stringify({'restriction_type': restriction_type, 'start_range': parseFloat(start_range), 'end_range': parseFloat(end_range), 'allow_disallow':bAllow_Disallow }));
+						break;
+					case "Time":
+						console.log("Time");
+						var start_time = $("#start-time-div input").val();
+						var end_time = $("#end-time-div input").val();
+						socket.emit('add_restriction',JSON.stringify({'restriction_type': restriction_type, 'start_time': start_time, 'end_time': end_time, 'allow_disallow':bAllow_Disallow }));
+						break;
+					case "Weekday":
+						console.log("Weekday");
+						var week_Days = $("#week-day-div .weekDays-selector");
+						var strSelectedDays = "";
+						week_Days.children('input').each(function () {
+							if ($(this).prop('checked')) {
+								if (strSelectedDays == ""){
+									strSelectedDays = $(this).val();
+								} else {
+									strSelectedDays = strSelectedDays + "," + $(this).val();
+								}
+							}
+						});
+						socket.emit('add_restriction',JSON.stringify({'restriction_type': restriction_type, 'restriction_value': strSelectedDays, 'allow_disallow':bAllow_Disallow }));
+						break;
+				}
+			});
+
+			$(".RestrictionEnableSpan input").click(function() {
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				if (this.checked){
+					$("#desc_"+id).removeAttr("disabled");
+					$("#start-date_"+id).removeAttr("disabled");
+					$("#end-date_"+id).removeAttr("disabled");
+					$("#start-range_"+id).removeAttr("disabled");
+					$("#end-range_"+id).removeAttr("disabled");
+					$("#start-time_"+id).removeAttr("disabled");
+					$("#end-time_"+id).removeAttr("disabled");
+					$("#weekdays_"+id).find("input:checkbox").removeAttr("disabled");
+					$("#radio-allow_"+id).removeAttr("disabled");
+					$("#radio-disallow_"+id).removeAttr("disabled");
+				} else {
+					$("#desc_"+id).prop("disabled", "disabled");
+					$("#start-date_"+id).prop("disabled", "disabled");
+					$("#end-date_"+id).prop("disabled", "disabled");
+					$("#start-range_"+id).prop("disabled", "disabled");
+					$("#end-range_"+id).prop("disabled", "disabled");
+					$("#start-time_"+id).prop("disabled", "disabled");
+					$("#end-time_"+id).prop("disabled", "disabled");
+					$("#weekdays_"+id).find("input:checkbox").prop("disabled", "disabled");
+					$("#radio-allow_"+id).prop("disabled", "disabled");
+					$("#radio-disallow_"+id).prop("disabled", "disabled");
+				}
+				socket.emit('set_restriction_enable',JSON.stringify({'restriction_id': parseInt(id), 'value': this.checked }));
+			});
+
+			$(".RestrictionDescriptionSpan input").change(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				socket.emit('set_restriction_desc',JSON.stringify({'restriction_id': parseInt(id), 'value': this.value }));
+			});
+
+			$(".RestrictionStartDate input").change(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				socket.emit('set_restriction_start_date',JSON.stringify({'restriction_id': parseInt(id), 'value': this.value }));
+			});
+
+			$(".RestrictionEndDate input").change(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				socket.emit('set_restriction_end_date',JSON.stringify({'restriction_id': parseInt(id), 'value': this.value }));
+			});
+
+			$(".RestrictionStartTime input").change(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				socket.emit('set_restriction_start_time',JSON.stringify({'restriction_id': parseInt(id), 'value': this.value }));
+			});
+
+			$(".RestrictionEndTime input").change(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				socket.emit('set_restriction_end_time',JSON.stringify({'restriction_id': parseInt(id), 'value': this.value }));
+			});
+
+			$(".RestrictionStartRange input").change(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				socket.emit('set_restriction_start_range',JSON.stringify({'restriction_id': parseInt(id), 'value': this.value }));
+			});
+
+			$(".RestrictionEndRange input").change(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				socket.emit('set_restriction_end_range',JSON.stringify({'restriction_id': parseInt(id), 'value': this.value }));
+			});
+
+			$(".RestrictionValue input").change(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+
+				var week_Days = $("#weekdays_" + id);
+				var strSelectedDays = "";
+				week_Days.children('input').each(function () {
+					if ($(this).prop('checked')) {
+						if (strSelectedDays == ""){
+							strSelectedDays = $(this).val();
+						} else {
+							strSelectedDays = strSelectedDays + "," + $(this).val();
+						}
+					}
+				});
+				socket.emit('set_restriction_value',JSON.stringify({'restriction_id': parseInt(id), 'value': strSelectedDays }));
+			});
+
+			$(".RestrictionAllowDisAllow input").click(function() {
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+
+				var allow_disallow = $(this).val();
+				if (allow_disallow=="Allow"){
+					bAllow_Disallow = true;
+				} else {
+					bAllow_Disallow = false;
+				}
+				socket.emit('set_restriction_allow_disallow',JSON.stringify({'restriction_id': parseInt(id), 'allow_disallow': bAllow_Disallow }));
+			});
+
+			$(".RestrictionDeleteSpan input").click(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				$("#dialog").dialog({
+					buttons : {
+						"Confirm" : function() {
+							socket.emit('delete_restriction',JSON.stringify({'restriction_id': parseInt(id) }));
+						},
+						"Cancel" : function() {
+							$(this).dialog("close");
+						}
+					}
+				});
+				$("#dialog").dialog("open");
+			});
+
+			$(".ProgramAddSpan input").click(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				var program_id = $("#select-program_" + id).val();
+				socket.emit('add_program_restriction',JSON.stringify({'restriction_id': parseInt(id), 'program_id': parseInt(program_id)}));
+			});
+	
+			$(".ProgramDeleteSpan input").click(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var program_id = arrID[1];
+				var restriction_id = $(this).siblings("input:hidden").val();
+				$("#dialog").dialog({
+					buttons : {
+						"Confirm" : function() {
+							socket.emit('remove_program_restriction',JSON.stringify({'restriction_id': parseInt(restriction_id), 'program_id': parseInt(program_id) }));
+						},
+						"Cancel" : function() {
+							$(this).dialog("close");
+						}
+					}
+				});
+				$("#dialog").dialog("open");
+			});
+
+		});
+	</script>
+		<div id="dialog" title="Confirmation Required">
+			Are you sure about this?
+		</div>
+	</body>
+</html>
+{% endblock %}

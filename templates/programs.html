@@ -1,0 +1,251 @@
+{% extends 'layout.html' %}
+{% from "_macros.html" import duration %}
+
+{% block body %}
+		<div class="container" >
+			<div class="row">
+				<div id="program_div" class="col-lg-12">
+					<table class="table table-bordered dataTable" id="dataTable" cellspacing="0" width="100%">
+						<thead>
+							<tr role="row" style="border: 2px solid #000 !important;">
+								<th class="center">Enabled</th>
+								<th class="td-select center">Program</th>
+								<th>Description</th>
+								<th class="center">Start Time(s)</th>
+								<th class="center"></th>
+							</tr>
+						</thead>
+						<tfoot>
+							<tr>
+								<th colspan="7" class="center"><input type="button" id="btn_add_program" value="Add Program" style="min-width: 160px;"/></th>
+							</tr>
+						</tfoot>
+						<tbody>
+						  {% for program in programs %}
+						    <tr role="row" class="RowEven" style="border-top: 2px solid #000;">
+						      <td>
+						        {% if program.enabled %}
+						          <input type="checkbox" id="chk_{{program.program_id}}" name="chk_{{program.program_id}}" checked>
+						        {% else %}
+						          <input type="checkbox" id="chk_{{program.program_id}}" name="chk_{{program.program_id}}">
+						        {% endif %}
+						      </td>
+						      <td class="td-select">{{ program.program_id }}</td>
+						      {% if program.enabled %}
+						      <td class="ProgamDescriptionSpan"><input type="text" id="desc_{{ program.program_id }}" value="{{ program.description }}" style="width:100%;max-width: 100%;"></td>
+						      {% else %}
+						      <td class="ProgamDescriptionSpan"><input type="text" id="desc_{{ program.program_id }}" value="{{ program.description }}" style="width:100%;max-width: 100%;" disabled></td>
+						      {% endif %}
+								<td class="ProgamDeleteRunTimeSpan">
+									{% for run_time in program.program_run %}
+										<div>
+											<input type="hidden" id="old-input-time_{{program.program_id}}" value="{{ run_time.start_time|timeformat }}" >
+											<input type="time" id="input-time_{{program.program_id}}" value="{{ run_time.start_time|timeformat }}" step="300" autocomplete="off" style="max-width: 125px;">
+											<input type="button" id="remove_{{ program.program_id }}" value="Remove" style="min-width: 50px;"/>
+										<div>
+									{% endfor %}
+								</td>
+						      <td class="ProgamDeleteSpan"><input type="button" id="delete_{{ program.program_id }}" value="Delete" style="min-width: 50px;"/></td>
+					   	</tr>
+							<tr>
+								<td colspan="5">
+									<table class="table table-bordered dataTable" id="table_{{program.program_id}}" cellspacing="0" width="100%" style="margin-bottom: 0px;">
+										<tr role="row">
+											<th class="center">Zone</th>
+											<th>Description</th>
+											<th class="center">Zone Run (min)</th>
+											<th></th>
+										</tr>
+										<tfoot>
+											<tr>
+												<th colspan="4" class="center ZoneAddSpan">
+													<select id="select-zone_{{program.program_id}}">
+													{% for zone in zones %}
+													<option value="{{ zone.zone_id }}" {{'' if zone.enabled else 'disabled'}}>{{ zone.description }}</option>
+													{% endfor %}
+													</select>
+													<input type="button" id="btn-zone-add_{{program.program_id}}" value="Add Zone" style="min-width: 50px;"/>
+												</th>
+											</tr>
+										</tfoot>
+										{% for program_zone in program.program_zones %}
+											{% if loop.index % 2 == 0 %}
+											<tr role="row" class="RowEven">
+											{% else %}
+											<tr role="row" class="RowOdd">
+											{% endif %}
+											<td>{{ program_zone.zone_id }}</td>
+											<td>{{ program_zone.zone.description }}</td>
+											<td class="ZoneRunTimeSpan">
+												<input type="hidden" id="program-id" value="{{ program.program_id }}" >
+												{{ duration(program_zone.zone_id, program_zone.run_time) }}
+											</td>
+											<td class="ZoneDeleteSpan">
+												<input type="hidden" id="program-id" value="{{ program.program_id }}" >
+												<input type="button" id="remove_{{ program_zone.zone_id }}" value="Remove" style="min-width: 50px;"/>
+											</td>
+										</tr>
+										{% endfor %}
+									</table>
+								</td>
+							</tr>
+							<tr>
+								<td colspan="5" class="ProgamStartTimeSpan center RowEven">
+									Program Start Time: 
+									<input type="time" id="input-time_{{program.program_id}}" step="300" autocomplete="off" style="max-width: 125px;">
+									<input type="button" id="btn-add-time_{{program.program_id}}" value="Add Time" style="min-width: 50px;"/>
+								</td>
+							</tr>
+						  {% endfor %}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div> 
+
+    <script>
+		$(document).ready(function() {
+
+			$("#dialog").dialog({
+				autoOpen: false,
+				modal: true
+			});
+
+			function addZero(i) {
+				if (i < 10) {
+					i = "0" + i;
+				}
+				return i;
+			}
+			var now = new Date();
+			$(".ProgamStartTimeSpan").find("[type=time]" ).val(addZero(now.getHours())+':'+addZero(now.getMinutes()));
+
+			// Create SocketIO connect and attach handlers for events from the server.
+			var socket = io.connect();
+			socket.on('connect', function(e) {
+				console.log("Connected!");
+			});
+
+			socket.on('change_event', function(e) {
+				location.reload();
+			});
+			
+			socket.on('program_change', function(e) {
+				location.reload();
+			});
+
+			// Setup live_data event receiver.
+			var liveDataSource = new EventSource("{{ url_for('live_data') }}");
+			liveDataSource.onmessage = function(e) {
+				var data = $.parseJSON(e.data);
+				$('#time_value').text(data.time);
+			}
+
+			$('#btn_add_program').click(function() {
+				socket.emit('add_program');
+			});
+
+			$("#program_div input[type='checkbox']").click(function() {
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				if (this.checked){
+					$("#desc_"+id).removeAttr("disabled");
+				} else {
+					$("#desc_"+id).prop("disabled", "disabled");
+				}
+				socket.emit('set_program_enable',JSON.stringify({'program_id': parseInt(id), 'value': this.checked }));
+			});
+
+			$(".ProgamDescriptionSpan input").change(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				socket.emit('set_program_desc',JSON.stringify({'program_id': parseInt(id), 'value': this.value }));
+			});
+
+			$(".ProgamDeleteSpan input").click(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				$("#dialog").dialog({
+					buttons : {
+						"Confirm" : function() {
+							socket.emit('delete_program',JSON.stringify({'program_id': parseInt(id) }));
+						},
+						"Cancel" : function() {
+							$(this).dialog("close");
+						}
+					}
+				});
+				$("#dialog").dialog("open");
+			});
+
+			$(".ZoneAddSpan input").click(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var id = arrID[1];
+				var zone_id = $("#select-zone_" + id).val();
+				socket.emit('add_program_zone',JSON.stringify({'program_id': parseInt(id), 'zone_id': parseInt(zone_id)}));
+			});
+
+			$(".ZoneRunTimeSpan select").change(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var zone_id = arrID[1];
+				var run_time = $(this).val();
+				var program_id = $(this).siblings("input:hidden").val();
+				socket.emit('change_program_zone_runtime',JSON.stringify({'program_id': parseInt(program_id), 'zone_id': parseInt(zone_id), 'run_time': parseInt(run_time) }));
+			});
+			
+			$(".ZoneDeleteSpan input").click(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var zone_id = arrID[1];
+				var program_id = $(this).siblings("input:hidden").val();
+				$("#dialog").dialog({
+					buttons : {
+						"Confirm" : function() {
+							socket.emit('remove_program_zone',JSON.stringify({'program_id': parseInt(program_id), 'zone_id': parseInt(zone_id) }));
+						},
+						"Cancel" : function() {
+							$(this).dialog("close");
+						}
+					}
+				});
+				$("#dialog").dialog("open");
+			});
+
+			$(".ProgamStartTimeSpan input:button").click(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var program_id = arrID[1];
+				var start_time = $(this).siblings().val();
+				socket.emit('add_program_run_time',JSON.stringify({'program_id': parseInt(program_id), 'start_time': start_time}));
+			});
+
+			$(".ProgamDeleteRunTimeSpan input:button").click(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var program_id = arrID[1];
+				var start_time = $(this).siblings("#input-time_" + program_id).val();
+				socket.emit('remove_program_run_time',JSON.stringify({'program_id': parseInt(program_id), 'start_time': start_time}));
+			});
+
+			$(".ProgamDeleteRunTimeSpan input").blur(function(){
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var program_id = arrID[1];
+				var start_time = $(this).val();
+				var old_time = $("#old-input-time_" + program_id).val();
+				socket.emit('set_program_run_time',JSON.stringify({'program_id': parseInt(program_id), 'start_time': start_time, 'old_time': old_time}));
+			});
+
+      });
+    </script>
+		<div id="dialog" title="Confirmation Required">
+  			Are you sure about this?
+		</div>
+	</body>
+</html>
+{% endblock %}
