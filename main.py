@@ -245,7 +245,6 @@ def GetNextProgamRun():
 	# find the earliest time/program in the results
 	find_datetime = None
 	for result in results:
-		# print(result)
 		start_date = result.start_date
 		end_date = result.end_date
 		day_interval = result.day_interval
@@ -258,7 +257,6 @@ def GetNextProgamRun():
 		prev_start_datetime = start_datetime
 		while start_datetime < datetime.now():
 			start_datetime = start_datetime + timedelta(days=day_interval)
-			# print ('1:start_datetime:' + str(start_datetime))
 
 			bResult = True
 			if start_datetime >= datetime.now():
@@ -267,27 +265,21 @@ def GetNextProgamRun():
 							.join(Program_Restriction)\
 							.filter(Program_Restriction.program_id == result.program_id )\
 							.all()
-				# print(restrictions)
 				for restriction in restrictions:
 					bResult = False
-					# print("<---------------------------------------------------------->")
 					while not bResult and start_datetime < end_date:
 						if restriction.Restriction.restriction_type == 'Calendar':
 							bResult = isAllowedDate(restriction.Restriction.start_date, restriction.Restriction.end_date, start_datetime, restriction.Restriction.allow_disallow_indicator)
-							# print(str(result.program_id) + ':Calender Restriction: ' + str(bResult) + ' ' + str(end_date) + ' ' + str(start_datetime))
 						elif restriction.Restriction.restriction_type == 'Sensor':
 							# TBD - external sensor trigger check
 							bResult = True
 						elif restriction.Restriction.restriction_type == 'Time':
 							bResult = isAllowedTime(restriction.Restriction.start_date, restriction.Restriction.end_date, start_datetime, restriction.Restriction.allow_disallow_indicator)
-							# print('Time Restriction: ' + str(bResult)  + ' ' + str(start_datetime))
 						elif restriction.Restriction.restriction_type == 'Weekday':
 							bResult = isAllowedWeekDay(restriction.Restriction.restriction_value, start_datetime, restriction.Restriction.allow_disallow_indicator)
-							# print('Weekday Restriction: ' + str(bResult) + ' ' + restriction.Restriction.restriction_value + ' ' + str(start_datetime))
 						if not bResult and start_datetime < end_date:
 							start_datetime = start_datetime + timedelta(days=day_interval)
 
-				# print ('2:start_datetime:' + str(start_datetime))
 
 		if find_datetime is None:
 			if start_datetime <= end_date and bResult:
@@ -305,8 +297,6 @@ def GetNextProgamRun():
 		if not bResult or start_datetime >= end_date:
 			start_datetime = prev_start_datetime
 
-		# print("<---------------------------------------------------------->")
-		# print ('find_datetime:' + str(find_datetime))
 
 	if find_datetime is None:
 		return dict( program_id=0, program='Programs Restricted', run_datetime=datetime.now())
