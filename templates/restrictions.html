@@ -197,6 +197,7 @@
 			});
 
 			var now = new Date();
+			now.setDate(now.getDate()-1);
 			$("#start-date-input" ).val(now.toISOString().slice(0,10));
 			now.setMonth(now.getMonth()+1);
 			$("#end-date-input" ).val(now.toISOString().slice(0,10));

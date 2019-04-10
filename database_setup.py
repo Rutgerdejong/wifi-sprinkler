@@ -6,7 +6,8 @@ from sqlalchemy import PrimaryKeyConstraint
 # from sqlalchemy.orm import relationship
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////root/WifiApp/wifi_data.db'
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////root/WifiApp/wifi_data.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///wifi_data.db'
 db = SQLAlchemy(app)
 
 class Zone(db.Model):
@@ -47,7 +48,7 @@ class Program_Run(db.Model):
 
 	program_id = db.Column(db.Integer, db.ForeignKey("Program.program_id"), primary_key=True)
 	start_time = db.Column(db.DateTime, unique=False, primary_key=True, default=datetime.utcnow)
-	last_run = db.Column(db.Integer, unique=False)
+	last_run = db.Column(db.DateTime, unique=False)
 
 class Schedule(db.Model):
 	__tablename__ = 'Schedule'

@@ -67,17 +67,7 @@ class Program_Run(db.Model):
 
 	program_id = db.Column(db.Integer, db.ForeignKey("Program.program_id"), primary_key=True)
 	start_time = db.Column(db.DateTime, unique=False, primary_key=True, default=datetime.now)
-	@socketio.on('set_zone_event')
-	def set_zone_event(json_data):
-		data = json.loads(json_data)
-		# Check if the zone state is 0 (off) or 1 (on) and set the LED accordingly.
-		if data['value'] == 1:
-			ws.set_interrupt(False)
-		thr = Thread(target=ws.set_zone, args=[data['zone'], data['value'], data['duration']*60])
-		thr.deamon = True # Don't let this thread block exiting.
-		thr.start()
-		return ('', 204)
-	last_run = db.Column(db.Integer, unique=False)
+	last_run = db.Column(db.DateTime, unique=False)
 
 class Schedule(db.Model):
 
@@ -244,6 +234,8 @@ def GetNextProgamRun():
 
 	# find the earliest time/program in the results
 	find_datetime = None
+	bResult = True
+	start_time = None
 	for result in results:
 		start_date = result.start_date
 		end_date = result.end_date
@@ -252,56 +244,55 @@ def GetNextProgamRun():
 		program_run = Program_Run.query.filter_by(program_id=result.program_id)\
 					.order_by(Program_Run.start_time)\
 					.first()
-		start_time = program_run.start_time
-		start_datetime = datetime.combine(datetime.date(start_date) , datetime.time(start_time) )
-		prev_start_datetime = start_datetime
-		while start_datetime < datetime.now():
-			start_datetime = start_datetime + timedelta(days=day_interval)
+		if not program_run is None:
+			start_time = program_run.start_time
+			start_datetime = datetime.combine(datetime.date(start_date) , datetime.time(start_time) )
+			prev_start_datetime = start_datetime
+			while start_datetime < datetime.now():
+				start_datetime = start_datetime + timedelta(days=day_interval)
 
-			bResult = True
-			if start_datetime >= datetime.now():
-				# Check if there are any restriction that don't allow this time/date not to run
-				restrictions = db.session.query(Restriction, Program_Restriction)\
-							.join(Program_Restriction)\
-							.filter(Program_Restriction.program_id == result.program_id )\
-							.all()
-				for restriction in restrictions:
-					bResult = False
-					while not bResult and start_datetime < end_date:
-						if restriction.Restriction.restriction_type == 'Calendar':
-							bResult = isAllowedDate(restriction.Restriction.start_date, restriction.Restriction.end_date, start_datetime, restriction.Restriction.allow_disallow_indicator)
-						elif restriction.Restriction.restriction_type == 'Sensor':
-							# TBD - external sensor trigger check
-							bResult = True
-						elif restriction.Restriction.restriction_type == 'Time':
-							bResult = isAllowedTime(restriction.Restriction.start_date, restriction.Restriction.end_date, start_datetime, restriction.Restriction.allow_disallow_indicator)
-						elif restriction.Restriction.restriction_type == 'Weekday':
-							bResult = isAllowedWeekDay(restriction.Restriction.restriction_value, start_datetime, restriction.Restriction.allow_disallow_indicator)
-						if not bResult and start_datetime < end_date:
-							start_datetime = start_datetime + timedelta(days=day_interval)
+				bResult = True
+				if start_datetime >= datetime.now():
+					# Check if there are any restriction that don't allow this time/date not to run
+					restrictions = db.session.query(Restriction, Program_Restriction)\
+								.join(Program_Restriction)\
+								.filter(Program_Restriction.program_id == result.program_id )\
+								.all()
+					for restriction in restrictions:
+						bResult = False
+						while not bResult and start_datetime < end_date:
+							if restriction.Restriction.restriction_type == 'Calendar':
+								bResult = isAllowedDate(restriction.Restriction.start_date, restriction.Restriction.end_date, start_datetime, restriction.Restriction.allow_disallow_indicator)
+							elif restriction.Restriction.restriction_type == 'Sensor':
+								# TBD - external sensor trigger check
+								bResult = True
+							elif restriction.Restriction.restriction_type == 'Time':
+								bResult = isAllowedTime(restriction.Restriction.start_date, restriction.Restriction.end_date, start_datetime, restriction.Restriction.allow_disallow_indicator)
+							elif restriction.Restriction.restriction_type == 'Weekday':
+								bResult = isAllowedWeekDay(restriction.Restriction.restriction_value, start_datetime, restriction.Restriction.allow_disallow_indicator)
+							if not bResult and start_datetime < end_date:
+								start_datetime = start_datetime + timedelta(days=day_interval)
 
+			if find_datetime is None:
+				if start_datetime <= end_date and bResult:
+					find_datetime = start_datetime
+					program_id = result.program_id
+					program_desc = result.description
+			else:
+				if start_datetime < find_datetime and start_datetime <= end_date and bResult:
+					find_datetime = start_datetime
+					program_id = result.program_id
+					program_desc = result.description
 
-		if find_datetime is None:
-			if start_datetime <= end_date and bResult:
-				find_datetime = start_datetime
-				program_id = result.program_id
-				program_desc = result.description
-		else:
-			if start_datetime < find_datetime and start_datetime <= end_date and bResult:
-				find_datetime = start_datetime
-				program_id = result.program_id
-				program_desc = result.description
-
-		# if we didn't find date, start from the first found date
-		# so we can process possible other restrictions
-		if not bResult or start_datetime >= end_date:
-			start_datetime = prev_start_datetime
-
+			# if we didn't find date, start from the first found date
+			# so we can process possible other restrictions
+			if not bResult or start_datetime >= end_date:
+				start_datetime = prev_start_datetime
 
 	if find_datetime is None:
-		return dict( program_id=0, program='Programs Restricted', run_datetime=datetime.now())
+		return dict( program_id=0, program='Programs Restricted', run_datetime=datetime.now(), start_time=start_time)
 	else:
-		return dict( program_id=program_id, program=program_desc, run_datetime=find_datetime)
+		return dict( program_id=program_id, program=program_desc, run_datetime=find_datetime, start_time=start_time)
 
 ##############################################################################################
 #            SOCKETIO - Functions
@@ -327,6 +318,21 @@ def get_season(dtDate):
 	  season = 'Winter'
 	return season
 
+##############################################################################################
+#            SOCKETIO - Functions
+##############################################################################################
+
+@socketio.on('set_zone_event')
+def set_zone_event(json_data):
+	data = json.loads(json_data)
+	# Check if the zone state is 0 (off) or 1 (on) and set the LED accordingly.
+	if data['value'] == 1:
+		ws.set_interrupt(False)
+	thr = Thread(target=ws.set_zone, args=[data['zone'], data['value'], data['duration']])
+	thr.deamon = True # Don't let this thread block exiting.
+	thr.start()
+	return ('', 204)
+
 @socketio.on('set_zone_enable')
 def set_zone_enable(json_data):
 	data = json.loads(json_data)
@@ -350,13 +356,15 @@ def interrupt_zone_event():
 	ws.set_interrupt(True)
 	return ('', 204)
 
+
+
 #####################################  Scheduler #########################################################
 
 @socketio.on('run_schedule')
 def run_schedule():
 	# scheduler.delete_job('1')
 	next_progam_run = GetNextProgamRun()
-	job = app.apscheduler.add_job(func=RunProgramSchedule, trigger='date', run_date=next_progam_run['run_datetime'], args=[int(next_progam_run['program_id'])], id='1')
+	job = app.apscheduler.add_job(func=RunProgramSchedule, trigger='date', run_date=next_progam_run['run_datetime'], args=[int(next_progam_run['program_id']), next_progam_run['start_time'], next_progam_run['run_datetime']], id='1')
 	print("<---------------------------------------------------------->")
 	print(job)
 	print("<---------------------------------------------------------->")
@@ -368,35 +376,40 @@ def stop_schedule():
 	socketio.emit('change_event', "", broadcast=True )
 	return ('', 204)
 
-def RunProgramSchedule(program_id):
+def RunProgramSchedule(program_id, start_time, run_datetime):
 	print("<---------------------------------------------------------->")
-	print("Start Schedule for program: " + str(program_id))
+	print("Start Schedule for program: " + str(program_id) + ' ' + str(start_time) + ' ' + str(run_datetime) )
 	print("<---------------------------------------------------------->")
 
 	# first find out if there are adjustments for the program we are about to run
-	adjustments = db.session.query(Program_Adjustment.program_id, Adjustment.adjustment_id, Adjustment.start_date, Adjustment.end_date, Adjustment.adjust_value, Adjustment.enabled)\
+	adjustment = db.session.query(Program_Adjustment.program_id, Adjustment.adjustment_id, Adjustment.start_date, Adjustment.end_date, Adjustment.adjust_value, Adjustment.enabled)\
 				.join(Adjustment, Program_Adjustment.adjustment_id==Adjustment.adjustment_id)\
 				.filter(Program_Adjustment.program_id == program_id, Adjustment.start_date <= datetime.now(), Adjustment.end_date >= datetime.now() , Adjustment.enabled == True )\
 				.first()
-	adjust_value = adjustments.adjust_value
-	if adjust_value == None:
-		adjustment_factor = 100
-	else:
-		adjustment_factor = adjust_value
-	print(adjustment_factor)
+	adjustment_factor = 100
+	if not adjustment is None:
+		adjustment_factor = adjustment.adjust_value
 	# get the scheduled program with runtimes
 	results = db.session.query(Program_Zones.program_id, Program_Zones.run_time, Zone.zone_id, Zone.description, Zone.enabled)\
 				.join(Zone, Program_Zones.zone_id==Zone.zone_id)\
 				.order_by(Zone.zone_id)\
 				.filter(Program_Zones.program_id == program_id, Zone.enabled == True )\
-				.all()	
-	# print(results)
+				.all()
 	for result in results:
-		print(result)
 		run_time = result.run_time
 		adjusted_run_time = int((adjustment_factor * run_time * 60) / 100)
-		print (adjusted_run_time)
 		ws.set_zone(result.zone_id, 1, adjusted_run_time)
+
+	program_run = Program_Run.query.filter_by(program_id=program_id, start_time=start_time).first()
+	program_run.last_run = run_datetime
+	db.session.commit()
+
+	# Schedule the next run
+	next_progam_run = GetNextProgamRun()
+	job = app.apscheduler.add_job(func=RunProgramSchedule, trigger='date', run_date=next_progam_run['run_datetime'], args=[int(next_progam_run['program_id']), next_progam_run['start_time'], next_progam_run['run_datetime']], id='1')
+	print("<---------------------------------------------------------->")
+	print(job)
+	print("<---------------------------------------------------------->")
 	socketio.emit('change_event', "", broadcast=True )
 
 #####################################  Program #########################################################
@@ -491,7 +504,6 @@ def set_program_run_time(json_data):
 	program_run = Program_Run.query.filter_by(program_id=data['program_id'], start_time=datetime_object).first()
 	datetime_object = datetime.strptime(data['start_time'], '%H:%M')
 	program_run.start_time = datetime_object
-	print(datetime_object)
 	db.session.commit()
 	socketio.emit('program_change', data, broadcast=True )
 	return ('', 204)
