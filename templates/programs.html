@@ -286,8 +286,6 @@
 	      alertTimerId = setTimeout ( "removePopup()", 750 );
 			});
 
-			removePopup();
-
 			$(".icon-zone-question").click(function(){
 				var offset = $(this).offset();
 				var strID = this.id;
@@ -311,6 +309,13 @@
           }
       	});
 			});
+
+			$(".icon-zone-question").mouseleave(function(e){
+				clearTimeout ( alertTimerId );
+	      alertTimerId = setTimeout ( "removePopup()", 750 );
+			});
+
+			removePopup();
 
     });
     </script>

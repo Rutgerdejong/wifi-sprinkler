@@ -13,7 +13,7 @@
 							<th >Description</th>
 							<th id="ZoneOnOffSpan">On/Off</th>
 							<th >Duration</th>
-							<th >Progress</th>
+							<th >Progress / History</th>
 						</thead>
 						<tfoot>
 							<tr>
@@ -22,7 +22,7 @@
 								<th >Description</th>
 								<th id="ZoneOnOffSpan">On/Off</th>
 								<th >Duration</th>
-								<th >Progress</th>
+								<th >Progress / History</th>
 							</tr>
 						</tfoot>
 						<tbody>
@@ -47,7 +47,12 @@
 						        <td id=""><button class="btn btn-success" type='button' value=0 id='{{ zone.zone_id }}' disabled>n/a</button></td>
 						      {% endif %}
 						      <td>{{ duration(zone.zone_id, 0) }}</td>
-						      <td><span id="progress_div_{{zone.zone_id}}"></span></td>
+						      <td>
+										<span id="progress_div_{{zone.zone_id}}"></span>
+										<svg class="icon icon-zone-question" id="zone-history_{{ zone.zone_id }}">
+											<use xlink:href="/static/css/symbol-defs.svg#icon-question"></use>
+										</svg>
+									</td>
 						   	</tr>
 						  {% endfor %}
 						</tbody>
@@ -57,6 +62,12 @@
 		</div> 
 
 		<script>
+
+		function removePopup(){
+			var historydiv = $("#zoom-container");
+			historydiv.hide();
+		}
+
 		$(document).ready(function() {
 
 			// Create SocketIO connect and attach handlers for events from the server.
@@ -86,7 +97,6 @@
 					}
 				}
 			});
-
 
 			$('#zone_div button').click(function() {
 				var id = this.id;
@@ -125,6 +135,36 @@
 				var arrID = strID.split("_");
 				var id = arrID[1];
 				socket.emit('set_zone_desc',JSON.stringify({'zone': parseInt(id), 'value': this.value }));
+			});
+
+			var alertTimerId = 0;
+			var historydiv = $("#zoom-container");
+
+			$(".icon-zone-question").click(function(){
+				var offset = $(this).offset();
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var zone_id = arrID[1];
+        $.ajax({
+          url: "/zone_history",
+          data: "&zone=" + zone_id,
+          timeout: 20000,
+          success: function (html) {
+          	historydiv.html(html);
+						historydiv.show();
+						historydiv.width(historydiv.find(".zone_div table").width());
+						historydiv.offset({ top: offset.top+15, left: offset.left-historydiv.find(".zone_div table").width()+12});
+						clearTimeout ( alertTimerId );
+					},
+          error: function (html) {
+            console.log(html);
+          }
+      	});
+			});
+
+			$(".icon-zone-question").mouseleave(function(e){
+				clearTimeout ( alertTimerId );
+	      alertTimerId = setTimeout ( "removePopup()", 750 );
 			});
 
 	   });

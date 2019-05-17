@@ -240,7 +240,7 @@ def program_history():
 	program_id = request.args.get('pid', 0, type=int)
 	programs_history = db.session.query(Program_Zones_History)\
 			.filter(Program_Zones_History.program_id == program_id) \
-			.order_by(Program_Zones_History.zone_run_timestamp) \
+			.order_by(Program_Zones_History.zone_run_timestamp.desc()) \
 			.all()
 	return render_template('program_history.html', programs_history=programs_history)
 
@@ -250,10 +250,18 @@ def program_zone_history():
 	zone_id = request.args.get('zone', 0, type=int)
 	programs_history = db.session.query(Program_Zones_History)\
 			.filter(Program_Zones_History.program_id == program_id, Program_Zones_History.zone_id == zone_id) \
-			.order_by(Program_Zones_History.zone_run_timestamp) \
+			.order_by(Program_Zones_History.zone_run_timestamp.desc()) \
 			.all()
 	return render_template('program_history.html', programs_history=programs_history)
 
+@app.route("/zone_history")
+def zone_history():
+	zone_id = request.args.get('zone', 0, type=int)
+	zone_history = db.session.query(Program_Zones_History)\
+			.filter(Program_Zones_History.zone_id == zone_id) \
+			.order_by(Program_Zones_History.zone_run_timestamp.desc()) \
+			.all()
+	return render_template('zone_history.html', zone_history=zone_history)
 
 ##############################################################################################
 #            G L O B A L - Functions
@@ -338,7 +346,7 @@ def GetNextProgamRun():
 		return dict( program_id=program_id, program=program_desc, run_datetime=find_datetime, start_time=start_time)
 
 ##############################################################################################
-#            SOCKETIO - Functions
+#            Generic - Functions
 ##############################################################################################
 
 def get_season(dtDate):
