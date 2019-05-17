@@ -144,13 +144,6 @@
 				location.reload();
 			});
 
-			// Setup live_data event receiver.
-			var liveDataSource = new EventSource("{{ url_for('live_data') }}");
-			liveDataSource.onmessage = function(e) {
-				var data = $.parseJSON(e.data);
-				$('#time_value').text(data.time);
-			}
-
 			$('#btn_add_adjustment').click(function() {
 				var adjust_value = $("#select_adjust-value").val();
 				var start_date = $("#adjust_startdate").val();

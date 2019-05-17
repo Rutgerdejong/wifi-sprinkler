@@ -25,6 +25,8 @@ scheduler = APScheduler()
 scheduler.init_app(app)
 scheduler.start()
 
+job_id = 0
+
 db = SQLAlchemy(app)
 
 ################################## DB Classes ############################################################
@@ -51,13 +53,25 @@ class Program(db.Model):
 
 class Program_Zones(db.Model):
 	__tablename__ = 'Program_Zones'
-	
+
 	__table_args__ = (
 		PrimaryKeyConstraint('zone_id', 'program_id'),
-	)	
+	)
 	zone_id = db.Column(db.Integer, db.ForeignKey('Zone.zone_id'), nullable=False)
 	program_id = db.Column(db.Integer, db.ForeignKey('Program.program_id'), nullable=False)
 	run_time = db.Column(db.Integer, unique=False)
+
+class Program_Zones_History(db.Model):
+	__tablename__ = 'Program_Zones_History'
+	__table_args__ = (
+		PrimaryKeyConstraint('zone_id', 'program_id', 'zone_run_timestamp'),
+	)
+
+	zone_id = db.Column(db.Integer, db.ForeignKey('Zone.zone_id'), nullable=False)
+	program_id = db.Column(db.Integer, db.ForeignKey('Program.program_id'), nullable=False)
+	zone_run_timestamp = db.Column(db.DateTime, unique=False, primary_key=True, default=datetime.utcnow)
+	zone_run_duration = db.Column(db.Integer, unique=False)
+	completion = db.Column(db.Boolean)
 
 class Program_Run(db.Model):
 	__tablename__ = 'Program_Run'
@@ -175,13 +189,22 @@ def dateformat(value, format='%Y-%m-%d'):
 def timeformat(value, format='%H:%M'):
 	return value.strftime(format)
 
+@app.template_filter('datetimeformat')
+def datetimeformat(value, format='%Y-%m-%d %H:%M'):
+	return value.strftime(format)
+
+@app.template_filter('durationformat')
+def durationformat(value):
+	return timedelta(seconds=value)
+
+@app.template_filter('datetimeformat2')
+def datetimeformat2(value, format='%Y-%m-%d %H:%M:%S'):
+	return value.strftime(format)
+
 ##############################################################################################
 #            APP - Routes
 ##############################################################################################
 
-@app.template_filter('datetimeformat')
-def datetimeformat(value, format='%Y-%m-%d %H:%M'):
-	return value.strftime(format)
 # Index route renders the main HTML page.
 
 @app.route("/")
@@ -211,6 +234,26 @@ def adjustments():
 	programs = Program.query.filter_by(enabled=True)
 	next_progam_run = GetNextProgamRun()
 	return render_template('adjustments.html', adjustments=adjustments, programs=programs, next_progam_run=next_progam_run, curent_page='Adjustments')
+
+@app.route("/program_history")
+def program_history():
+	program_id = request.args.get('pid', 0, type=int)
+	programs_history = db.session.query(Program_Zones_History)\
+			.filter(Program_Zones_History.program_id == program_id) \
+			.order_by(Program_Zones_History.zone_run_timestamp) \
+			.all()
+	return render_template('program_history.html', programs_history=programs_history)
+
+@app.route("/program_zone_history")
+def program_zone_history():
+	program_id = request.args.get('pid', 0, type=int)
+	zone_id = request.args.get('zone', 0, type=int)
+	programs_history = db.session.query(Program_Zones_History)\
+			.filter(Program_Zones_History.program_id == program_id, Program_Zones_History.zone_id == zone_id) \
+			.order_by(Program_Zones_History.zone_run_timestamp) \
+			.all()
+	return render_template('program_history.html', programs_history=programs_history)
+
 
 ##############################################################################################
 #            G L O B A L - Functions
@@ -339,7 +382,7 @@ def set_zone_enable(json_data):
 	zone = Zone.query.filter_by(zone_id=data['zone']).first()
 	zone.enabled = data['value']
 	db.session.commit()
-	socketio.emit('zone_change', "", broadcast=True )	
+	socketio.emit('change_event', "", broadcast=True )
 	return ('', 204)
 
 @socketio.on('set_zone_desc')
@@ -348,7 +391,7 @@ def set_zone_desc(json_data):
 	zone = Zone.query.filter_by(zone_id=data['zone']).first()
 	zone.description = data['value']
 	db.session.commit()
-	socketio.emit('zone_change', "", broadcast=True )
+	socketio.emit('change_event', "", broadcast=True )
 	return ('', 204)
 
 @socketio.on('interrupt_zone_event')
@@ -356,15 +399,16 @@ def interrupt_zone_event():
 	ws.set_interrupt(True)
 	return ('', 204)
 
-
-
 #####################################  Scheduler #########################################################
 
 @socketio.on('run_schedule')
 def run_schedule():
-	# scheduler.delete_job('1')
+	global job_id
+	if job_id != 0:
+		scheduler.delete_job(job_id)
 	next_progam_run = GetNextProgamRun()
 	job = app.apscheduler.add_job(func=RunProgramSchedule, trigger='date', run_date=next_progam_run['run_datetime'], args=[int(next_progam_run['program_id']), next_progam_run['start_time'], next_progam_run['run_datetime']], id='1')
+	job_id = job.id
 	print("<---------------------------------------------------------->")
 	print(job)
 	print("<---------------------------------------------------------->")
@@ -372,8 +416,11 @@ def run_schedule():
 
 @socketio.on('stop_schedule')
 def stop_schedule():
-	scheduler.delete_job('1')
-	socketio.emit('change_event', "", broadcast=True )
+	global job_id
+	if job_id != 0:
+		scheduler.delete_job(job_id)
+		job_id = 0
+		socketio.emit('change_event', "", broadcast=True )
 	return ('', 204)
 
 def RunProgramSchedule(program_id, start_time, run_datetime):
@@ -398,7 +445,12 @@ def RunProgramSchedule(program_id, start_time, run_datetime):
 	for result in results:
 		run_time = result.run_time
 		adjusted_run_time = int((adjustment_factor * run_time * 60) / 100)
+		# Update program_zone_history, with completion = False
+		run_timestamp = AddProgramZoneRunHistory(program_id, result.zone_id, adjusted_run_time)
+		# Run the zone
 		ws.set_zone(result.zone_id, 1, adjusted_run_time)
+		# Update program_zone_history, with completion = True
+		CompleteProgramZoneRunHistory(program_id, result.zone_id, run_timestamp)
 
 	program_run = Program_Run.query.filter_by(program_id=program_id, start_time=start_time).first()
 	program_run.last_run = run_datetime
@@ -407,10 +459,38 @@ def RunProgramSchedule(program_id, start_time, run_datetime):
 	# Schedule the next run
 	next_progam_run = GetNextProgamRun()
 	job = app.apscheduler.add_job(func=RunProgramSchedule, trigger='date', run_date=next_progam_run['run_datetime'], args=[int(next_progam_run['program_id']), next_progam_run['start_time'], next_progam_run['run_datetime']], id='1')
+	job_id = job.id
 	print("<---------------------------------------------------------->")
 	print(job)
 	print("<---------------------------------------------------------->")
 	socketio.emit('change_event', "", broadcast=True )
+
+def AddProgramZoneRunHistory(program_id, zone_id, adjusted_run_time):
+	# Get the number of history records for a zone_id & program_id combination
+	nCount = db.session.query(Program_Zones_History)\
+			.filter(Program_Zones_History.zone_id == zone_id, Program_Zones_History.program_id == program_id) \
+			.order_by(Program_Zones_History.zone_run_timestamp) \
+			.count()
+	# Only keep 10 records
+	if nCount > 9:
+		program_zone_history_old_one = db.session.query(Program_Zones_History) \
+			.filter(Program_Zones_History.zone_id == zone_id, Program_Zones_History.program_id == program_id) \
+			.order_by(Program_Zones_History.zone_run_timestamp) \
+			.first()
+		db.session.delete(program_zone_history_old_one)
+
+	dtNow = datetime.now()
+	program_zone_history = Program_Zones_History(zone_id=zone_id, program_id=program_id, zone_run_timestamp=dtNow, zone_run_duration=adjusted_run_time, completion=False)
+	db.session.add(program_zone_history)
+	db.session.commit()
+	return dtNow
+
+def CompleteProgramZoneRunHistory(program_id, zone_id, run_timestamp):
+	program_zone_history = db.session.query(Program_Zones_History) \
+		.filter(Program_Zones_History.zone_id == zone_id, Program_Zones_History.program_id == program_id, Program_Zones_History.zone_run_timestamp== run_timestamp) \
+		.first()
+	program_zone_history.completion = True
+	db.session.commit()
 
 #####################################  Program #########################################################
 
@@ -838,9 +918,11 @@ def set_restriction_allow_disallow(json_data):
 @app.route("/live_data")
 def live_data():
 	def get_data():
+		global job_id
 		while True:
 			wifi_data = {
-					'time':time.strftime("%H:%M:%S")
+					'time':time.strftime("%H:%M:%S"),
+					'job':job_id
 				}
 			yield 'data: {0}\n\n'.format(json.dumps(wifi_data))
 			time.sleep(1.0)
@@ -854,4 +936,6 @@ def zone_change(zone, progress, interrupt_zones):
 # Start the flask debug server listening on the pi port 5000 by default.
 if __name__ == "__main__":
 	ws.set_zone_callback(zone_change)
+	if job_id == 0:
+		run_schedule()
 	socketio.run(app,host='0.0.0.0', debug=True,port=5000)

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="">
+	<head>
+
+	</head>
+	<body style="margin:0;">
+    <div class="container" >
+      <div class="row">
+        <div id="zone_div" class="col-lg-12">
+          <table class="table table-bordered dataTable" id="dataTable" cellspacing="0"  width="100%">
+            <thead>
+              <tr role="row">
+              <th >Zone</th>
+              <th >Time Stamp</th>
+              <th >Duration</th>
+              <th >Completion</th>
+            </thead>
+            <tbody>
+            {% for prog_hist in programs_history %}
+              {% if prog_hist.zone_id % 2 == 0 %}
+              <tr role="row" class="RowEven">
+              {% else %}
+              <tr role="row" class="RowOdd">
+              {% endif %}
+                <td>{{ prog_hist.zone_id }}</td>
+                <td>{{ prog_hist.zone_run_timestamp|datetimeformat2 }}</td>
+                <td>{{ prog_hist.zone_run_duration|durationformat }}</td>
+                <td>{{ prog_hist.completion }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </body>

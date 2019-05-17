@@ -87,12 +87,6 @@
 				}
 			});
 
-			// Setup live_data event receiver.
-			var liveDataSource = new EventSource("{{ url_for('live_data') }}");
-			liveDataSource.onmessage = function(e) {
-				var data = $.parseJSON(e.data);
-				$('#time_value').text(data.time);
-			}
 
 			$('#zone_div button').click(function() {
 				var id = this.id;

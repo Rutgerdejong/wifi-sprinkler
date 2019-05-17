@@ -40,6 +40,18 @@ class Program_Zones(db.Model):
 	program_id = db.Column(db.Integer, db.ForeignKey('Program.program_id'), nullable=False)
 	run_time = db.Column(db.Integer, unique=False)
 
+class Program_Zones_History(db.Model):
+	__tablename__ = 'Program_Zones_History'
+	__table_args__ = (
+		PrimaryKeyConstraint('zone_id', 'program_id', 'zone_run_timestamp'),
+	)
+
+	zone_id = db.Column(db.Integer, db.ForeignKey('Zone.zone_id'), nullable=False)
+	program_id = db.Column(db.Integer, db.ForeignKey('Program.program_id'), nullable=False)
+	zone_run_timestamp = db.Column(db.DateTime, unique=False, primary_key=True, default=datetime.utcnow)
+	zone_run_duration = db.Column(db.Integer, unique=False)
+	completion = db.Column(db.Boolean)
+
 class Program_Run(db.Model):
 	__tablename__ = 'Program_Run'
 	__table_args__ = (

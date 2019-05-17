@@ -1,6 +1,7 @@
 {% extends 'layout.html' %}
 {% from "_macros.html" import duration %}
 
+
 {% block body %}
 		<div class="container" >
 			<div class="row">
@@ -32,19 +33,23 @@
 						      </td>
 						      <td class="td-select">{{ program.program_id }}</td>
 						      {% if program.enabled %}
-						      <td class="ProgamDescriptionSpan"><input type="text" id="desc_{{ program.program_id }}" value="{{ program.description }}" style="width:100%;max-width: 100%;"></td>
+						      <td class="ProgamDescriptionSpan"><input type="text" id="desc_{{ program.program_id }}" value="{{ program.description }}" style="width:80%;max-width: 100%;">
 						      {% else %}
-						      <td class="ProgamDescriptionSpan"><input type="text" id="desc_{{ program.program_id }}" value="{{ program.description }}" style="width:100%;max-width: 100%;" disabled></td>
+						      <td class="ProgamDescriptionSpan"><input type="text" id="desc_{{ program.program_id }}" value="{{ program.description }}" style="width:80%;max-width: 100%;" disabled>
 						      {% endif %}
-								<td class="ProgamDeleteRunTimeSpan">
-									{% for run_time in program.program_run %}
-										<div>
-											<input type="hidden" id="old-input-time_{{program.program_id}}" value="{{ run_time.start_time|timeformat }}" >
-											<input type="time" id="input-time_{{program.program_id}}" value="{{ run_time.start_time|timeformat }}" step="300" autocomplete="off" style="max-width: 125px;">
-											<input type="button" id="remove_{{ program.program_id }}" value="Remove" style="min-width: 50px;"/>
-										<div>
-									{% endfor %}
-								</td>
+										<svg class="icon icon-program-question" id="program-history_{{ program.program_id }}">
+											<use xlink:href="/static/css/symbol-defs.svg#icon-question"></use>
+										</svg>
+									</td>
+									<td class="ProgamDeleteRunTimeSpan">
+										{% for run_time in program.program_run %}
+											<div>
+												<input type="hidden" id="old-input-time_{{program.program_id}}" value="{{ run_time.start_time|timeformat }}" >
+												<input type="time" id="input-time_{{program.program_id}}" value="{{ run_time.start_time|timeformat }}" step="300" autocomplete="off" style="max-width: 125px;">
+												<input type="button" id="remove_{{ program.program_id }}" value="Remove" style="min-width: 50px;"/>
+											<div>
+										{% endfor %}
+									</td>
 						      <td class="ProgamDeleteSpan"><input type="button" id="delete_{{ program.program_id }}" value="Delete" style="min-width: 50px;"/></td>
 					   	</tr>
 							<tr>
@@ -79,6 +84,9 @@
 											<td class="ZoneRunTimeSpan">
 												<input type="hidden" id="program-id" value="{{ program.program_id }}" >
 												{{ duration(program_zone.zone_id, program_zone.run_time) }}
+												<svg class="icon icon-zone-question" id="zone-history_{{ program_zone.zone_id }}">
+													<use xlink:href="/static/css/symbol-defs.svg#icon-question"></use>
+												</svg>
 											</td>
 											<td class="ZoneDeleteSpan">
 												<input type="hidden" id="program-id" value="{{ program.program_id }}" >
@@ -101,9 +109,15 @@
 					</table>
 				</div>
 			</div>
-		</div> 
+		</div>
 
-    <script>
+<script>
+
+		function removePopup(){
+			var historydiv = $("#zoom-container");
+			historydiv.hide();
+		}
+
 		$(document).ready(function() {
 
 			$("#dialog").dialog({
@@ -129,17 +143,10 @@
 			socket.on('change_event', function(e) {
 				location.reload();
 			});
-			
+
 			socket.on('program_change', function(e) {
 				location.reload();
 			});
-
-			// Setup live_data event receiver.
-			var liveDataSource = new EventSource("{{ url_for('live_data') }}");
-			liveDataSource.onmessage = function(e) {
-				var data = $.parseJSON(e.data);
-				$('#time_value').text(data.time);
-			}
 
 			$('#btn_add_program').click(function() {
 				socket.emit('add_program');
@@ -197,7 +204,7 @@
 				var program_id = $(this).siblings("input:hidden").val();
 				socket.emit('change_program_zone_runtime',JSON.stringify({'program_id': parseInt(program_id), 'zone_id': parseInt(zone_id), 'run_time': parseInt(run_time) }));
 			});
-			
+
 			$(".ZoneDeleteSpan input").click(function(){
 				var strID = this.id;
 				var arrID = strID.split("_");
@@ -241,10 +248,74 @@
 				socket.emit('set_program_run_time',JSON.stringify({'program_id': parseInt(program_id), 'start_time': start_time, 'old_time': old_time}));
 			});
 
-      });
+			var alertTimerId = 0;
+			var historydiv = $("#zoom-container");
+
+			$(".icon-program-question").click(function(){
+				var offset = $(this).offset();
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var program_id = arrID[1];
+        $.ajax({
+          url: "/program_history",
+          data: "pid="+ program_id,
+          timeout: 20000,
+          success: function (html) {
+          	historydiv.html(html);
+						historydiv.show();
+						historydiv.width(historydiv.find(".zone_div table").width());
+						historydiv.offset({ top: offset.top+15, left: offset.left-historydiv.find(".zone_div table").width()+12});
+						clearTimeout ( alertTimerId );
+					},
+          error: function (html) {
+            console.log(html);
+          }
+      	});
+			});
+
+			historydiv.mouseenter(function(e) {
+				clearTimeout ( alertTimerId );
+			});
+			historydiv.mouseleave(function(e) {
+				clearTimeout ( alertTimerId );
+	      alertTimerId = setTimeout ( "removePopup()", 500 );
+	    });
+
+			$(".icon-program-question").mouseleave(function(e){
+				clearTimeout ( alertTimerId );
+	      alertTimerId = setTimeout ( "removePopup()", 750 );
+			});
+
+			removePopup();
+
+			$(".icon-zone-question").click(function(){
+				var offset = $(this).offset();
+				var strID = this.id;
+				var arrID = strID.split("_");
+				var zone_id = arrID[1];
+				var program_id = $(this).siblings("input:hidden").val();
+				//console.log('pid:' + program_id + ' zid:' + zone_id);
+        $.ajax({
+          url: "/program_zone_history",
+          data: "pid="+ program_id + "&zone=" + zone_id,
+          timeout: 20000,
+          success: function (html) {
+          	historydiv.html(html);
+						historydiv.show();
+						historydiv.width(historydiv.find(".zone_div table").width());
+						historydiv.offset({ top: offset.top+15, left: offset.left-historydiv.find(".zone_div table").width()+12});
+						clearTimeout ( alertTimerId );
+					},
+          error: function (html) {
+            console.log(html);
+          }
+      	});
+			});
+
+    });
     </script>
-		<div id="dialog" title="Confirmation Required">
-  			Are you sure about this?
+<div id="dialog" title="Confirmation Required">
+			Are you sure about this?
 		</div>
 	</body>
 </html>
