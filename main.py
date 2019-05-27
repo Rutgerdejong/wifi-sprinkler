@@ -341,9 +341,9 @@ def GetNextProgamRun():
 				start_datetime = prev_start_datetime
 
 	if find_datetime is None:
-		return dict( program_id=0, program='Programs Restricted', run_datetime=datetime.now(), start_time=start_time)
+		return dict( program_id=0, program='Programs Restricted', run_datetime=datetime.now())
 	else:
-		return dict( program_id=program_id, program=program_desc, run_datetime=find_datetime, start_time=start_time)
+		return dict( program_id=program_id, program=program_desc, run_datetime=find_datetime)
 
 ##############################################################################################
 #            Generic - Functions
@@ -415,7 +415,7 @@ def run_schedule():
 	if job_id != 0:
 		scheduler.delete_job(job_id)
 	next_progam_run = GetNextProgamRun()
-	job = app.apscheduler.add_job(func=RunProgramSchedule, trigger='date', run_date=next_progam_run['run_datetime'], args=[int(next_progam_run['program_id']), next_progam_run['start_time'], next_progam_run['run_datetime']], id='1')
+	job = app.apscheduler.add_job(func=RunProgramSchedule, trigger='date', run_date=next_progam_run['run_datetime'], args=[int(next_progam_run['program_id']), next_progam_run['run_datetime']], id='1')
 	job_id = job.id
 	print("<---------------------------------------------------------->")
 	print(job)
@@ -431,9 +431,10 @@ def stop_schedule():
 		socketio.emit('change_event', "", broadcast=True )
 	return ('', 204)
 
-def RunProgramSchedule(program_id, start_time, run_datetime):
+def RunProgramSchedule(program_id, run_datetime):
+	global job_id
 	print("<---------------------------------------------------------->")
-	print("Start Schedule for program: " + str(program_id) + ' ' + str(start_time) + ' ' + str(run_datetime) )
+	print("Start Schedule for program: " + str(program_id) + ' ' + str(run_datetime) )
 	print("<---------------------------------------------------------->")
 
 	# first find out if there are adjustments for the program we are about to run
@@ -460,13 +461,14 @@ def RunProgramSchedule(program_id, start_time, run_datetime):
 		# Update program_zone_history, with completion = True
 		CompleteProgramZoneRunHistory(program_id, result.zone_id, run_timestamp)
 
-	program_run = Program_Run.query.filter_by(program_id=program_id, start_time=start_time).first()
+	datetime_object = datetime.combine(datetime(1900,1,1), run_datetime.time())
+	program_run = Program_Run.query.filter_by(program_id=program_id, start_time=datetime_object).first()
 	program_run.last_run = run_datetime
 	db.session.commit()
 
 	# Schedule the next run
 	next_progam_run = GetNextProgamRun()
-	job = app.apscheduler.add_job(func=RunProgramSchedule, trigger='date', run_date=next_progam_run['run_datetime'], args=[int(next_progam_run['program_id']), next_progam_run['start_time'], next_progam_run['run_datetime']], id='1')
+	job = app.apscheduler.add_job(func=RunProgramSchedule, trigger='date', run_date=next_progam_run['run_datetime'], args=[int(next_progam_run['program_id']), next_progam_run['run_datetime']], id='1')
 	job_id = job.id
 	print("<---------------------------------------------------------->")
 	print(job)
@@ -946,4 +948,4 @@ if __name__ == "__main__":
 	ws.set_zone_callback(zone_change)
 	if job_id == 0:
 		run_schedule()
-	socketio.run(app,host='0.0.0.0', debug=True,port=5000)
+	socketio.run(app,host='0.0.0.0', use_reloader=False, debug=True,port=5000)
