@@ -38,7 +38,7 @@ class WifiSprinkler(object):
 			for port in arrPorts:
 				GPIO.setup(port, GPIO.OUT)
 				GPIO.output(port, GPIO.LOW)
-			time.sleep(1.0)
+			time.sleep(10.0)
 			#
 			if value == 1:
 				# Turn ON the sprinkler           
