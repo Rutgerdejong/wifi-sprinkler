@@ -481,8 +481,8 @@ def AddProgramZoneRunHistory(program_id, zone_id, adjusted_run_time):
 			.filter(Program_Zones_History.zone_id == zone_id, Program_Zones_History.program_id == program_id) \
 			.order_by(Program_Zones_History.zone_run_timestamp) \
 			.count()
-	# Only keep 10 records
-	if nCount > 9:
+	# Only keep 3 records
+	if nCount > 3:
 		program_zone_history_old_one = db.session.query(Program_Zones_History) \
 			.filter(Program_Zones_History.zone_id == zone_id, Program_Zones_History.program_id == program_id) \
 			.order_by(Program_Zones_History.zone_run_timestamp) \

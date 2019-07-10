@@ -112,7 +112,8 @@
 					$(this).text("Off");
 					socket.emit('interrupt_zone_event');
 				}              
-				var duration = parseInt($("#select_" + id + " option:selected" ).text());
+				var duration = parseInt($("#select_" + id + " option:selected" ).text())*60;
+				console.log(duration);
 				socket.emit('set_zone_event',JSON.stringify({'zone': parseInt(id), 'value': state, 'duration' : duration }));
 			});
 
