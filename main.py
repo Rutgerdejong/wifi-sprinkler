@@ -426,7 +426,7 @@ def run_schedule():
 def stop_schedule():
 	global job_id
 	if job_id != 0:
-		scheduler.delete_job(job_id)
+		scheduler.remove_all_jobs()
 		job_id = 0
 		socketio.emit('change_event', "", broadcast=True )
 	return ('', 204)

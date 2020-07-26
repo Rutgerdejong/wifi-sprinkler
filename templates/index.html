@@ -125,8 +125,13 @@
 					$("button#"+id).removeAttr("disabled");  
 					$("button#"+id).text("Off");  
 				} else {
-					$("button#"+id).prop("disabled", "disabled");
-					$("button#"+id).text("n/a");  
+					var r = confirm("Disable this zone?\nEither OK or Cancel.");
+  					if (r == true) {
+						$("button#"+id).prop("disabled", "disabled");
+						$("button#"+id).text("n/a");
+					} else {
+						$(this).prop( "checked", true );
+					}
 				}
 				socket.emit('set_zone_enable',JSON.stringify({'zone': parseInt(id), 'value': this.checked }));
 			});
